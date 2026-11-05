@@ -1,20 +1,20 @@
 # Clarity
 
-Clean Valorant stats tracker built with Tauri 2, React, TypeScript, and Vite.
+A lightweight VALORANT tracker built with Tauri, React, TypeScript, and Vite.
 
-## Development
+## Run
 
 ```sh
 npm install
 npm run tauri dev
 ```
 
-## Production build
+Create a production build with `npm run tauri build`.
 
-```sh
-npm run tauri build
-```
+## Project layout
 
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- `src/pages` contains route-level screens.
+- `src/components/core` contains app state, navigation, shared types, and catalog helpers.
+- `src/components/ui` contains reusable controls and surfaces.
+- `src/components/home`, `src/components/currentmatch`, and `src/components/matches` contain feature UI.
+- `tauri/src/valorant` contains account, match, profile, and stats code.

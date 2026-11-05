@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { Image } from "@tauri-apps/api/image";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const appWindow = getCurrentWindow();
@@ -8,8 +9,34 @@ type FrameProps = {
 };
 
 function Frame({ children }: FrameProps) {
+  useEffect(() => {
+    let active = true;
+
+    async function setIcon() {
+      try {
+        const response = await fetch("/clarity.png");
+        if (!response.ok) return;
+
+        const icon = await Image.fromBytes(await response.arrayBuffer());
+        try {
+          if (active) await appWindow.setIcon(icon);
+        } finally {
+          await icon.close();
+        }
+      } catch {}
+    }
+
+    void setIcon();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
-    <div className="relative flex h-screen overflow-hidden rounded-md bg-[#080808] font-[Google_Sans,sans-serif] text-zinc-100">
+    <div
+      className="relative flex h-screen select-none overflow-hidden rounded-md bg-[#080808] font-[Google_Sans,sans-serif] text-zinc-100"
+      onContextMenu={(event) => event.preventDefault()}
+    >
       <header className="absolute inset-x-0 top-0 z-50 h-10 select-none">
         <div
           className="absolute inset-y-0 left-0 right-20 cursor-default"
@@ -26,8 +53,19 @@ function Frame({ children }: FrameProps) {
             title="Minimize"
             type="button"
           >
-            <svg aria-hidden="true" fill="none" height="12" viewBox="0 0 16 16" width="12">
-              <path d="M3.5 8h9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.2" />
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="12"
+              viewBox="0 0 16 16"
+              width="12"
+            >
+              <path
+                d="M3.5 8h9"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="1.2"
+              />
             </svg>
           </button>
 
@@ -38,8 +76,19 @@ function Frame({ children }: FrameProps) {
             title="Close"
             type="button"
           >
-            <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 16 16" width="14">
-              <path d="m4.25 4.25 7.5 7.5m0-7.5-7.5 7.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.2" />
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="14"
+              viewBox="0 0 16 16"
+              width="14"
+            >
+              <path
+                d="m4.25 4.25 7.5 7.5m0-7.5-7.5 7.5"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="1.2"
+              />
             </svg>
           </button>
         </div>
