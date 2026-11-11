@@ -75,10 +75,6 @@ pub async fn match_details(id: String) -> Result<MatchDetails, String> {
     let info = get_ci(Some(&value), "MatchInfo").unwrap_or(&Value::Null);
     let queue = text(get_ci(Some(info), "QueueID"));
     let mode = text(get_ci(Some(info), "ModeID")).or_else(|| text(get_ci(Some(info), "GameMode")));
-    let deathmatch = [queue, mode].into_iter().flatten().any(|value| {
-        let value = value.to_ascii_lowercase();
-        value.contains("deathmatch") || value.contains("hurm")
-    });
     let source = get_ci(Some(&value), "Players")
         .and_then(Value::as_array)
         .ok_or_else(|| "Riot returned no player details for this match".to_string())?;
@@ -86,20 +82,56 @@ pub async fn match_details(id: String) -> Result<MatchDetails, String> {
         .iter()
         .filter_map(|player| {
             let subject = text(get_ci(Some(player), "Subject"))?;
-            let row = serde_json::json!({
-                "Subject": subject,
-                "PlayerIdentity": get_ci(Some(player), "PlayerIdentity").cloned().unwrap_or(Value::Null),
-            });
+            let row = player.clone();
             Some((subject.to_string(), row))
         })
         .collect::<Vec<_>>();
-    let (names, ranks) = futures::join!(player::names(&auth, &roster), async {
-        if deathmatch {
-            player::ranks(&auth, &roster).await
-        } else {
-            HashMap::new()
+    let (names, ranks) =
+        futures::join!(player::names(&auth, &roster), player::ranks(&auth, &roster));
+    let mut match_ranks = HashMap::new();
+    if queue.is_some_and(|queue| queue.eq_ignore_ascii_case("competitive")) {
+        let missing = source
+            .iter()
+            .filter_map(|player| {
+                let tier = num(get_ci(Some(player), "CompetitiveTier")).or_else(|| {
+                    num(path_ci(
+                        get_ci(Some(player), "PlayerIdentity"),
+                        &["SeasonalBadgeInfo", "Rank"],
+                    ))
+                });
+                (tier.unwrap_or(0) < 3)
+                    .then(|| text(get_ci(Some(player), "Subject")))
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        let rank_root = root.as_str();
+        let token = &auth.token;
+        let version = &auth.version;
+        let match_id = id.as_str();
+        for batch in missing.chunks(2) {
+            let loaded = futures::future::join_all(batch.iter().map(|subject| {
+                let subject = *subject;
+                async move {
+                let url = format!("{rank_root}/mmr/v1/players/{subject}/competitiveupdates?startIndex=0&endIndex=19&queue=competitive");
+                let tier = rank_data(&url, token, version)
+                    .await
+                    .ok()
+                    .and_then(|data| get_ci(Some(&data), "Matches").and_then(Value::as_array).cloned())
+                    .and_then(|games| games.into_iter().find(|game| {
+                        text(get_ci(Some(game), "MatchID")).is_some_and(|value| value.eq_ignore_ascii_case(match_id))
+                    }))
+                    .and_then(|game| num(get_ci(Some(&game), "TierBeforeUpdate"))
+                        .or_else(|| num(get_ci(Some(&game), "TierAfterUpdate"))))
+                    .filter(|tier| *tier >= 3);
+                (subject.to_string(), tier)
+            }})).await;
+            match_ranks.extend(
+                loaded
+                    .into_iter()
+                    .filter_map(|(subject, tier)| tier.map(|tier| (subject, tier))),
+            );
         }
-    },);
+    }
     let rounds = get_ci(Some(&value), "RoundResults")
         .and_then(Value::as_array)
         .cloned()
@@ -167,7 +199,8 @@ pub async fn match_details(id: String) -> Result<MatchDetails, String> {
                     .map(str::to_string),
                 tier: num(get_ci(Some(player), "CompetitiveTier"))
                     .or_else(|| num(path_ci(identity, &["SeasonalBadgeInfo", "Rank"])))
-                    .filter(|tier| !deathmatch || *tier >= 3)
+                    .filter(|tier| *tier >= 3)
+                    .or_else(|| match_ranks.get(subject).copied())
                     .or_else(|| ranks.get(subject).copied()),
                 level: num(path_ci(identity, &["AccountLevel"])),
                 kills: num(get_ci(stats, "Kills")).unwrap_or(0),
@@ -305,7 +338,9 @@ async fn load(
                                 num(get_ci(Some(game), "RankedRatingBeforeUpdate"))? as i32;
                             Some(after - before)
                         }),
-                    before.or(after),
+                    before
+                        .filter(|tier| *tier >= 3)
+                        .or_else(|| after.filter(|tier| *tier >= 3)),
                     before.zip(after).map(|(before, after)| {
                         if after > before {
                             1
@@ -611,9 +646,9 @@ async fn load(
             competitive,
             rr: rr_match.and_then(|(rr, _, _)| *rr),
             tier: if competitive {
-                rr_match
-                    .and_then(|(_, tier, _)| *tier)
-                    .or_else(|| num(get_ci(Some(player), "CompetitiveTier")))
+                rr_match.and_then(|(_, tier, _)| *tier).or_else(|| {
+                    num(get_ci(Some(player), "CompetitiveTier")).filter(|tier| *tier >= 3)
+                })
             } else {
                 None
             },

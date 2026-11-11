@@ -78,6 +78,11 @@ async fn player_profiles(
 }
 
 #[tauri::command]
+async fn missions() -> Result<Vec<valorant::Mission>, String> {
+    valorant::missions().await
+}
+
+#[tauri::command]
 async fn store() -> Result<valorant::Storefront, String> {
     valorant::store().await
 }
@@ -144,6 +149,7 @@ pub fn run() {
             current_match,
             current_loadouts,
             player_profiles,
+            missions,
             store,
             store_asset,
             sync_rpc

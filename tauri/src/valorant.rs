@@ -3,12 +3,14 @@ use reqwest::{Client, Error as HttpError};
 
 mod account;
 mod live;
+mod missions;
 mod player;
 mod stats;
 mod store;
 
 pub use account::account;
 pub use live::{current_match, loadouts, presence};
+pub use missions::{Mission, missions};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 pub use stats::{history, match_details, player_history, stats};

@@ -309,11 +309,7 @@ async fn profile(auth: &Auth, subject: &str) -> Option<ProfileStats> {
         PROFILE_MATCHES - 1
     );
     let (mmr, history) = futures::join!(
-        async {
-            rank_data(&mmr_url, &auth.token, &auth.version)
-                .await
-                .ok()
-        },
+        async { rank_data(&mmr_url, &auth.token, &auth.version).await.ok() },
         get::<Value>(&history_url, &auth.token, &auth.version),
     );
     let mut profile = mmr
@@ -330,6 +326,27 @@ async fn profile(auth: &Auth, subject: &str) -> Option<ProfileStats> {
             }
         })
         .unwrap_or_default();
+    if profile.current_tier.is_none_or(|tier| tier < 3) {
+        let updates =
+            format!("{mmr_url}/competitiveupdates?startIndex=0&endIndex=19&queue=competitive");
+        if let Ok(value) = rank_data(&updates, &auth.token, &auth.version).await {
+            let latest = get_ci(Some(&value), "Matches")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|game| {
+                    Some((
+                        num(get_ci(Some(game), "MatchStartTime")).unwrap_or(0),
+                        num(get_ci(Some(game), "TierAfterUpdate"))?,
+                    ))
+                })
+                .max_by_key(|(time, _)| *time)
+                .map(|(_, tier)| tier);
+            if latest.is_some_and(|tier| tier >= 3) {
+                profile.current_tier = latest;
+            }
+        }
+    }
     let ids = history
         .ok()
         .and_then(|value| value.get("History").and_then(Value::as_array).cloned())

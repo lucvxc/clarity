@@ -18,7 +18,10 @@ type Props = {
 
 function Card({ name, tagLine, level, playerCardId, tier, stats, loading, tiers, onRefresh }: Props) {
   const cardId = playerCardId ?? stats?.playerCardId;
-  const current = stats?.currentTier ?? tier;
+  const current = stats?.currentTier != null && stats.currentTier >= 3
+    ? stats.currentTier
+    : tier != null && tier >= 3 ? tier : stats?.currentTier;
+  const matchRank = current === tier && (stats?.currentTier == null || stats.currentTier < 3);
   const peak = stats?.peakTier;
   const games = stats?.games;
   const wins = stats?.wins;
@@ -27,7 +30,7 @@ function Card({ name, tagLine, level, playerCardId, tier, stats, loading, tiers,
   return (
     <Banner cardId={cardId ?? null} name={name} tag={tagLine ? `#${tagLine}` : level != null ? `Lvl ${level}` : "Player"} loading={loading} onRefresh={onRefresh}>
         <div className="grid grid-cols-2 divide-x divide-white/[0.08] md:grid-cols-4">
-          <Rank label="Current rank" value={current} tiers={tiers} loading={loading && current == null} known={stats != null} />
+          <Rank label={matchRank ? "Rank in match" : "Current rank"} value={current} tiers={tiers} loading={loading && current == null} known={stats != null} />
           <Rank label="Peak rank" value={peak} tiers={tiers} loading={loading} known={stats != null} />
           <Cell label="Win rate" value={winRate == null ? null : `${winRate}%`} loading={loading} detail={games != null && wins != null ? <><span className="text-emerald-400">{wins}W</span><span className="px-1 text-zinc-600">·</span><span className="text-rose-400">{Math.max(0, games - wins)}L</span></> : "This season"} />
           <Cell label="Ranked games" value={games == null ? null : String(games)} loading={loading} detail="This season" />

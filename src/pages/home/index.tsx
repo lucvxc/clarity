@@ -9,6 +9,7 @@ import AccountSummary from "../../components/home/accountsummary";
 import AgentFeature from "../../components/home/agentfeature";
 import Performance, { agentAccent } from "../../components/home/performance";
 import MatchList from "../../components/matches/list";
+import Missions from "../../components/home/missions";
 import type {
   OverviewStats,
   StatsStatus,
@@ -131,6 +132,7 @@ function Home({
             />
           </div>
         </div>
+        <Missions subject={account?.subject ?? null} />
         <MatchList
           matches={recentMatches}
           detail={recentDetail}
